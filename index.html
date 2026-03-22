@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Financeiro — Igreja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+/* ===== CONFIGURAÇÃO — edite aqui ===== */
+/* Suas chaves Supabase ficam no JS abaixo */
+
+:root {
+  --green:   #16a34a;
+  --green-l: #dcfce7;
+  --green-d: #14532d;
+  --red:     #dc2626;
+  --red-l:   #fee2e2;
+  --amber:   #d97706;
+  --amber-l: #fef3c7;
+  --blue:    #2563eb;
+  --blue-l:  #dbeafe;
+  --ink:     #0f172a;
+  --ink2:    #475569;
+  --ink3:    #94a3b8;
+  --surface: #f8fafc;
+  --card:    #ffffff;
+  --border:  #e2e8f0;
+  --radius:  12px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Sora', sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+/* ===== HEADER ===== */
+header {
+  background: var(--ink);
+  color: #fff;
+  padding: 0 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+header span { font-size: 12px; color: #94a3b8; font-family: 'JetBrains Mono', monospace; }
+
+/* ===== NAV ===== */
+nav {
+  display: flex;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  position: sticky;
+  top: 56px;
+  z-index: 99;
+}
+nav::-webkit-scrollbar { display: none; }
+.nav-btn {
+  flex: 1;
+  min-width: 80px;
+  padding: 14px 8px 12px;
+  border: none;
+  background: none;
+  font-family: 'Sora', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.nav-btn.active { color: var(--green); border-bottom-color: var(--green); }
+.nav-btn svg { width: 20px; height: 20px; }
+
+/* ===== MAIN ===== */
+main { padding: 1.25rem; max-width: 640px; margin: 0 auto; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 1rem;
+}
+
+/* ===== STAT CHIPS ===== */
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
+.stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .875rem .75rem;
+}
+.stat-label { font-size: 11px; color: var(--ink3); font-weight: 500; margin-bottom: 4px; }
+.stat-value { font-size: 20px; font-weight: 700; font-family: 'JetBrains Mono'; letter-spacing: -.02em; }
+.stat-value.green { color: var(--green); }
+.stat-value.red { color: var(--red); }
+.stat-value.blue { color: var(--blue); }
+
+/* ===== FORMS ===== */
+.form-group { margin-bottom: 1rem; }
+label { display: block; font-size: 12px; font-weight: 600; color: var(--ink2); margin-bottom: 6px; }
+input, select, textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--card);
+  transition: border-color .15s;
+  appearance: none;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(22,163,74,.1);
+}
+textarea { resize: vertical; min-height: 72px; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ===== BUTTONS ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 20px;
+  border-radius: var(--radius-sm);
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all .15s;
+}
+.btn-primary { background: var(--green); color: #fff; width: 100%; justify-content: center; }
+.btn-primary:hover { background: var(--green-d); }
+.btn-primary:active { transform: scale(.98); }
+.btn-danger { background: var(--red-l); color: var(--red); padding: 6px 10px; font-size: 12px; }
+.btn-sm { background: var(--surface); color: var(--ink2); border: 1px solid var(--border); padding: 6px 12px; font-size: 12px; }
+.btn-export { background: var(--blue-l); color: var(--blue); }
+
+/* ===== TOGGLE TIPO ===== */
+.toggle-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
+.toggle-opt { position: relative; }
+.toggle-opt input { position: absolute; opacity: 0; }
+.toggle-opt label {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all .15s;
+  color: var(--ink2);
+}
+.toggle-opt input:checked + label {
+  border-color: var(--green);
+  background: var(--green-l);
+  color: var(--green-d);
+}
+
+/* ===== CULTO SELECTOR ===== */
+.culto-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1rem; }
+.culto-opt { position: relative; }
+.culto-opt input { position: absolute; opacity: 0; }
+.culto-opt label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all .15s;
+  color: var(--ink2);
+}
+.culto-opt input:checked + label {
+  border-color: var(--blue);
+  background: var(--blue-l);
+  color: var(--blue);
+}
+
+/* ===== LIST ITEMS ===== */
+.list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.list-item:last-child { border-bottom: none; padding-bottom: 0; }
+.item-info { flex: 1; min-width: 0; }
+.item-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-sub { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+.item-value { font-family: 'JetBrains Mono'; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-green { background: var(--green-l); color: var(--green-d); }
+.badge-red   { background: var(--red-l);   color: var(--red); }
+.badge-amber { background: var(--amber-l); color: var(--amber); }
+.badge-blue  { background: var(--blue-l);  color: var(--blue); }
+
+/* ===== MONTH SELECTOR ===== */
+.month-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+.month-bar input[type=month] {
+  flex: 1;
+  font-family: 'JetBrains Mono';
+  font-size: 14px;
+}
+
+/* ===== EMPTY STATE ===== */
+.empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--ink3);
+  font-size: 14px;
+}
+
+/* ===== TOAST ===== */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--ink);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 40px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+  z-index: 999;
+  white-space: nowrap;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ===== LOADING ===== */
+.loading { text-align: center; padding: 2rem; color: var(--ink3); }
+.spinner {
+  width: 24px; height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 0 auto 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== SECTION SEPARATOR ===== */
+.section-sep {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin: 1.5rem 0 .75rem;
+}
+
+/* ===== CONFIG MODAL ===== */
+#config-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,.6);
+  z-index: 200;
+  align-items: flex-end;
+  justify-content: center;
+}
+#config-overlay.open { display: flex; }
+#config-modal {
+  background: var(--card);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 1.5rem 1.25rem;
+  width: 100%;
+  max-width: 640px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+#config-modal h2 { font-size: 16px; margin-bottom: 1rem; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 400px) {
+  .form-row { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== CONFIGURAÇÃO — EDITE AQUI ===== -->
+<script>
+  // Cole aqui suas chaves do Supabase
+  // Supabase → Project Settings → API
+  const SUPABASE_URL  = 'https://rovhtgcqnfxeqrbzjmid.supabase.co';
+  const SUPABASE_KEY  = 'sb_publishable_rbITW4AzqrB0PJzCsSF9xg_zaVYu6qD';
+  const NOME_IGREJA   = 'Minha Igreja';
+</script>
+<!-- ======================================= -->
+
+<header>
+  <h1 id="header-nome">⛪ Financeiro Igreja</h1>
+  <span id="mes-header"></span>
+</header>
+
+<nav>
+  <button class="nav-btn active" onclick="showPage('dashboard')" id="nav-dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Resumo
+  </button>
+  <button class="nav-btn" onclick="showPage('entrada')" id="nav-entrada">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+    Entrada
+  </button>
+  <button class="nav-btn" onclick="showPage('despesa')" id="nav-despesa">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+    Despesa
+  </button>
+  <button class="nav-btn" onclick="showPage('historico')" id="nav-historico">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+    Histórico
+  </button>
+  <button class="nav-btn" onclick="showPage('config')" id="nav-config">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Config
+  </button>
+</nav>
+
+<main>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="page active" id="page-dashboard">
+  <div class="month-bar">
+    <input type="month" id="mes-filtro" onchange="loadDashboard()"/>
+    <button class="btn btn-sm btn-export" onclick="exportarCSV()">↓ CSV</button>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-label">Entradas</div>
+      <div class="stat-value green" id="stat-entradas">R$0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Despesas</div>
+      <div class="stat-value red" id="stat-despesas">R$0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Saldo</div>
+      <div class="stat-value blue" id="stat-saldo">R$0</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Entradas por culto</div>
+    <div id="resumo-cultos"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Despesas por categoria</div>
+    <div id="resumo-categorias"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Últimos dízimos</div>
+    <div id="resumo-dizimos"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+  </div>
+</div>
+
+<!-- ===== ENTRADA ===== -->
+<div class="page" id="page-entrada">
+  <div class="card">
+    <div class="card-title">Registrar entrada</div>
+
+    <div class="form-group">
+      <label>Tipo</label>
+      <div class="toggle-group">
+        <div class="toggle-opt">
+          <input type="radio" name="tipo" id="tipo-oferta" value="Oferta" checked onchange="toggleMembro()"/>
+          <label for="tipo-oferta">🙏 Oferta</label>
+        </div>
+        <div class="toggle-opt">
+          <input type="radio" name="tipo" id="tipo-dizimo" value="Dízimo" onchange="toggleMembro()"/>
+          <label for="tipo-dizimo">💰 Dízimo</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Culto</label>
+      <div class="culto-group">
+        <div class="culto-opt">
+          <input type="radio" name="culto" id="culto-dom" value="Domingo" checked/>
+          <label for="culto-dom"><span style="font-size:18px">☀️</span>Domingo</label>
+        </div>
+        <div class="culto-opt">
+          <input type="radio" name="culto" id="culto-qua" value="Quarta-feira"/>
+          <label for="culto-qua"><span style="font-size:18px">🌙</span>Quarta</label>
+        </div>
+        <div class="culto-opt">
+          <input type="radio" name="culto" id="culto-sab" value="Sábado"/>
+          <label for="culto-sab"><span style="font-size:18px">⭐</span>Sábado</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="ent-data"/>
+      </div>
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="number" id="ent-valor" placeholder="0,00" min="0" step="0.01"/>
+      </div>
+    </div>
+
+    <div class="form-group" id="grupo-membro" style="display:none">
+      <label>Dizimista</label>
+      <select id="ent-membro">
+        <option value="">— selecione —</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Observação (opcional)</label>
+      <textarea id="ent-obs" placeholder="Ex: Oferta missionária..."></textarea>
+    </div>
+
+    <button class="btn btn-primary" onclick="salvarEntrada()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Salvar entrada
+    </button>
+  </div>
+</div>
+
+<!-- ===== DESPESA ===== -->
+<div class="page" id="page-despesa">
+  <div class="card">
+    <div class="card-title">Registrar despesa</div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="dep-data"/>
+      </div>
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="number" id="dep-valor" placeholder="0,00" min="0" step="0.01"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Categoria</label>
+      <select id="dep-categoria">
+        <option value="">— selecione —</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Descrição</label>
+      <input type="text" id="dep-descricao" placeholder="Ex: Conta de água — março"/>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Forma de pagamento</label>
+        <select id="dep-forma">
+          <option>Dinheiro</option>
+          <option>PIX</option>
+          <option>Cartão</option>
+          <option>Transferência</option>
+          <option>Boleto</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Responsável</label>
+        <input type="text" id="dep-responsavel" placeholder="Nome"/>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="salvarDespesa()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Salvar despesa
+    </button>
+  </div>
+</div>
+
+<!-- ===== HISTÓRICO ===== -->
+<div class="page" id="page-historico">
+  <div class="month-bar">
+    <input type="month" id="hist-mes" onchange="loadHistorico()"/>
+  </div>
+
+  <div class="section-sep">Entradas</div>
+  <div class="card" id="hist-entradas-card">
+    <div id="hist-entradas"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <div class="section-sep">Despesas</div>
+  <div class="card" id="hist-despesas-card">
+    <div id="hist-despesas"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<!-- ===== CONFIG ===== -->
+<div class="page" id="page-config">
+
+  <div class="card">
+    <div class="card-title">Categorias de despesa</div>
+    <div id="lista-categorias"><div class="loading"><div class="spinner"></div></div></div>
+    <div style="margin-top:1rem; display:flex; gap:8px;">
+      <input type="text" id="nova-cat" placeholder="Nova categoria..." style="flex:1"/>
+      <button class="btn btn-primary" style="width:auto" onclick="adicionarCategoria()">+</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Dizimistas / Membros</div>
+    <div id="lista-membros"><div class="loading"><div class="spinner"></div></div></div>
+    <div style="margin-top:1rem; display:flex; gap:8px;">
+      <input type="text" id="novo-membro" placeholder="Nome do membro..." style="flex:1"/>
+      <button class="btn btn-primary" style="width:auto" onclick="adicionarMembro()">+</button>
+    </div>
+  </div>
+
+</div>
+
+</main>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ===== INIT SUPABASE =====
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ===== UTILITÁRIOS =====
+const fmt = v => 'R$\u00a0' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+
+function toast(msg, dur=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function getMesAtual() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+
+function mesParaRange(mes) {
+  const [y, m] = mes.split('-').map(Number);
+  const inicio = `${y}-${String(m).padStart(2,'0')}-01`;
+  const fim = new Date(y, m, 0);
+  const fimStr = `${y}-${String(m).padStart(2,'0')}-${String(fim.getDate()).padStart(2,'0')}`;
+  return { inicio, fim: fimStr };
+}
+
+// ===== NAVEGAÇÃO =====
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('nav-' + id).classList.add('active');
+  if (id === 'dashboard') loadDashboard();
+  if (id === 'historico') loadHistorico();
+  if (id === 'config') loadConfig();
+  if (id === 'despesa') loadCategoriasSelect();
+}
+
+// ===== SETUP INICIAL =====
+async function init() {
+  document.getElementById('header-nome').textContent = '⛪ ' + NOME_IGREJA;
+
+  // Datas padrão
+  const hoje = new Date().toISOString().split('T')[0];
+  document.getElementById('ent-data').value = hoje;
+  document.getElementById('dep-data').value = hoje;
+  document.getElementById('mes-filtro').value = getMesAtual();
+  document.getElementById('hist-mes').value = getMesAtual();
+  document.getElementById('mes-header').textContent = new Date().toLocaleDateString('pt-BR',{month:'short',year:'numeric'}).toUpperCase();
+
+  await loadMembrosSelect();
+  await loadCategoriasSelect();
+  loadDashboard();
+}
+
+// ===== DASHBOARD =====
+async function loadDashboard() {
+  const mes = document.getElementById('mes-filtro').value;
+  const { inicio, fim } = mesParaRange(mes);
+
+  const [{ data: entradas }, { data: despesas }] = await Promise.all([
+    db.from('entradas').select('*').gte('data', inicio).lte('data', fim),
+    db.from('despesas').select('*, categorias(nome)').gte('data', inicio).lte('data', fim)
+  ]);
+
+  const totalEnt = (entradas||[]).reduce((s,e) => s + Number(e.valor), 0);
+  const totalDep = (despesas||[]).reduce((s,d) => s + Number(d.valor), 0);
+  const saldo = totalEnt - totalDep;
+
+  document.getElementById('stat-entradas').textContent = fmt(totalEnt);
+  document.getElementById('stat-despesas').textContent = fmt(totalDep);
+  const saldoEl = document.getElementById('stat-saldo');
+  saldoEl.textContent = fmt(saldo);
+  saldoEl.className = 'stat-value ' + (saldo >= 0 ? 'green' : 'red');
+
+  // Por culto
+  const cultos = ['Domingo','Quarta-feira','Sábado'];
+  const porCulto = cultos.map(c => ({
+    culto: c,
+    total: (entradas||[]).filter(e=>e.culto===c).reduce((s,e)=>s+Number(e.valor),0)
+  }));
+  const rcEl = document.getElementById('resumo-cultos');
+  if (!entradas || entradas.length === 0) { rcEl.innerHTML = '<div class="empty">Nenhuma entrada neste mês</div>'; }
+  else {
+    rcEl.innerHTML = porCulto.map(c => `
+      <div class="list-item">
+        <div class="item-info"><div class="item-title">${c.culto}</div></div>
+        <div class="item-value" style="color:var(--green)">${fmt(c.total)}</div>
+      </div>`).join('');
+  }
+
+  // Por categoria
+  const catMap = {};
+  (despesas||[]).forEach(d => {
+    const cat = d.categorias?.nome || 'Sem categoria';
+    catMap[cat] = (catMap[cat]||0) + Number(d.valor);
+  });
+  const catEl = document.getElementById('resumo-categorias');
+  if (!despesas || despesas.length === 0) { catEl.innerHTML = '<div class="empty">Nenhuma despesa neste mês</div>'; }
+  else {
+    catEl.innerHTML = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => `
+      <div class="list-item">
+        <div class="item-info"><div class="item-title">${cat}</div></div>
+        <div class="item-value" style="color:var(--red)">${fmt(val)}</div>
+      </div>`).join('');
+  }
+
+  // Dízimos
+  const dizimos = (entradas||[]).filter(e => e.tipo === 'Dízimo').slice(0,10);
+  const dzEl = document.getElementById('resumo-dizimos');
+  if (dizimos.length === 0) { dzEl.innerHTML = '<div class="empty">Nenhum dízimo neste mês</div>'; }
+  else {
+    // buscar nomes dos membros
+    const ids = [...new Set(dizimos.map(d=>d.membro_id).filter(Boolean))];
+    const membrosMap = {};
+    if (ids.length > 0) {
+      const { data: ms } = await db.from('membros').select('id,nome').in('id', ids);
+      (ms||[]).forEach(m => membrosMap[m.id] = m.nome);
+    }
+    dzEl.innerHTML = dizimos.map(d => `
+      <div class="list-item">
+        <div class="item-info">
+          <div class="item-title">${membrosMap[d.membro_id]||'Anônimo'}</div>
+          <div class="item-sub">${fmtDate(d.data)} · ${d.culto}</div>
+        </div>
+        <div class="item-value" style="color:var(--green)">${fmt(d.valor)}</div>
+      </div>`).join('');
+  }
+}
+
+// ===== ENTRADA =====
+function toggleMembro() {
+  const isDizimo = document.querySelector('input[name=tipo]:checked').value === 'Dízimo';
+  document.getElementById('grupo-membro').style.display = isDizimo ? 'block' : 'none';
+}
+
+async function loadMembrosSelect() {
+  const { data } = await db.from('membros').select('*').eq('ativo', true).order('nome');
+  const sel = document.getElementById('ent-membro');
+  sel.innerHTML = '<option value="">— selecione —</option>';
+  (data||[]).forEach(m => sel.innerHTML += `<option value="${m.id}">${m.nome}</option>`);
+}
+
+async function salvarEntrada() {
+  const tipo  = document.querySelector('input[name=tipo]:checked').value;
+  const culto = document.querySelector('input[name=culto]:checked').value;
+  const data  = document.getElementById('ent-data').value;
+  const valor = parseFloat(document.getElementById('ent-valor').value);
+  const obs   = document.getElementById('ent-obs').value;
+  const membroId = document.getElementById('ent-membro').value || null;
+
+  if (!data || isNaN(valor) || valor <= 0) { toast('⚠️ Preencha data e valor'); return; }
+
+  const { error } = await db.from('entradas').insert({
+    data, culto, tipo, valor, observacao: obs,
+    membro_id: tipo==='Dízimo' ? membroId : null
+  });
+
+  if (error) { toast('Erro ao salvar: ' + error.message); return; }
+  toast('✅ Entrada salva!');
+  document.getElementById('ent-valor').value = '';
+  document.getElementById('ent-obs').value = '';
+}
+
+// ===== DESPESA =====
+async function loadCategoriasSelect() {
+  const { data } = await db.from('categorias').select('*').order('nome');
+  const sel = document.getElementById('dep-categoria');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— selecione —</option>';
+  (data||[]).forEach(c => sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`);
+}
+
+async function salvarDespesa() {
+  const data       = document.getElementById('dep-data').value;
+  const valor      = parseFloat(document.getElementById('dep-valor').value);
+  const catId      = document.getElementById('dep-categoria').value || null;
+  const descricao  = document.getElementById('dep-descricao').value;
+  const forma      = document.getElementById('dep-forma').value;
+  const resp       = document.getElementById('dep-responsavel').value;
+
+  if (!data || isNaN(valor) || valor <= 0 || !descricao) { toast('⚠️ Preencha data, valor e descrição'); return; }
+
+  const { error } = await db.from('despesas').insert({
+    data, valor, categoria_id: catId, descricao, forma_pagamento: forma, responsavel: resp
+  });
+
+  if (error) { toast('Erro ao salvar: ' + error.message); return; }
+  toast('✅ Despesa salva!');
+  document.getElementById('dep-valor').value = '';
+  document.getElementById('dep-descricao').value = '';
+  document.getElementById('dep-responsavel').value = '';
+}
+
+// ===== HISTÓRICO =====
+async function loadHistorico() {
+  const mes = document.getElementById('hist-mes').value;
+  const { inicio, fim } = mesParaRange(mes);
+
+  const [{ data: entradas }, { data: despesas }] = await Promise.all([
+    db.from('entradas').select('*, membros(nome)').gte('data', inicio).lte('data', fim).order('data', {ascending:false}),
+    db.from('despesas').select('*, categorias(nome)').gte('data', inicio).lte('data', fim).order('data', {ascending:false})
+  ]);
+
+  const entEl = document.getElementById('hist-entradas');
+  if (!entradas || entradas.length === 0) {
+    entEl.innerHTML = '<div class="empty">Nenhuma entrada</div>';
+  } else {
+    entEl.innerHTML = entradas.map(e => `
+      <div class="list-item">
+        <div class="item-info">
+          <div class="item-title">
+            <span class="badge ${e.tipo==='Dízimo'?'badge-blue':'badge-green'}">${e.tipo}</span>
+            ${e.membros?.nome ? ' · ' + e.membros.nome : ''}
+          </div>
+          <div class="item-sub">${fmtDate(e.data)} · ${e.culto}${e.observacao?' · '+e.observacao:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="item-value" style="color:var(--green)">${fmt(e.valor)}</div>
+          <button class="btn btn-danger" onclick="deletarEntrada('${e.id}')">✕</button>
+        </div>
+      </div>`).join('');
+  }
+
+  const depEl = document.getElementById('hist-despesas');
+  if (!despesas || despesas.length === 0) {
+    depEl.innerHTML = '<div class="empty">Nenhuma despesa</div>';
+  } else {
+    depEl.innerHTML = despesas.map(d => `
+      <div class="list-item">
+        <div class="item-info">
+          <div class="item-title">${d.descricao}</div>
+          <div class="item-sub">${fmtDate(d.data)} · ${d.categorias?.nome||'—'} · ${d.forma_pagamento}${d.responsavel?' · '+d.responsavel:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="item-value" style="color:var(--red)">${fmt(d.valor)}</div>
+          <button class="btn btn-danger" onclick="deletarDespesa('${d.id}')">✕</button>
+        </div>
+      </div>`).join('');
+  }
+}
+
+async function deletarEntrada(id) {
+  if (!confirm('Remover esta entrada?')) return;
+  await db.from('entradas').delete().eq('id', id);
+  toast('Entrada removida');
+  loadHistorico();
+}
+async function deletarDespesa(id) {
+  if (!confirm('Remover esta despesa?')) return;
+  await db.from('despesas').delete().eq('id', id);
+  toast('Despesa removida');
+  loadHistorico();
+}
+
+// ===== CONFIG =====
+async function loadConfig() {
+  // Categorias
+  const { data: cats } = await db.from('categorias').select('*').order('nome');
+  const catEl = document.getElementById('lista-categorias');
+  catEl.innerHTML = (cats||[]).length === 0 ? '<div class="empty">Nenhuma categoria</div>' :
+    (cats||[]).map(c => `
+      <div class="list-item">
+        <div class="item-info"><div class="item-title">${c.nome}</div>${c.descricao?`<div class="item-sub">${c.descricao}</div>`:''}</div>
+        <button class="btn btn-danger" onclick="deletarCategoria('${c.id}')">✕</button>
+      </div>`).join('');
+
+  // Membros
+  const { data: mbs } = await db.from('membros').select('*').order('nome');
+  const mbEl = document.getElementById('lista-membros');
+  mbEl.innerHTML = (mbs||[]).length === 0 ? '<div class="empty">Nenhum membro</div>' :
+    (mbs||[]).map(m => `
+      <div class="list-item">
+        <div class="item-info">
+          <div class="item-title">${m.nome}</div>
+          <div class="item-sub">${m.ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-amber">Inativo</span>'}</div>
+        </div>
+        <button class="btn btn-danger" onclick="deletarMembro('${m.id}')">✕</button>
+      </div>`).join('');
+}
+
+async function adicionarCategoria() {
+  const nome = document.getElementById('nova-cat').value.trim();
+  if (!nome) return;
+  const { error } = await db.from('categorias').insert({ nome });
+  if (error) { toast('Erro: ' + error.message); return; }
+  document.getElementById('nova-cat').value = '';
+  toast('✅ Categoria adicionada');
+  loadConfig();
+  loadCategoriasSelect();
+}
+
+async function deletarCategoria(id) {
+  if (!confirm('Remover esta categoria?')) return;
+  await db.from('categorias').delete().eq('id', id);
+  toast('Categoria removida');
+  loadConfig();
+}
+
+async function adicionarMembro() {
+  const nome = document.getElementById('novo-membro').value.trim();
+  if (!nome) return;
+  const { error } = await db.from('membros').insert({ nome });
+  if (error) { toast('Erro: ' + error.message); return; }
+  document.getElementById('novo-membro').value = '';
+  toast('✅ Membro adicionado');
+  loadConfig();
+  loadMembrosSelect();
+}
+
+async function deletarMembro(id) {
+  if (!confirm('Remover este membro?')) return;
+  await db.from('membros').delete().eq('id', id);
+  toast('Membro removido');
+  loadConfig();
+  loadMembrosSelect();
+}
+
+// ===== EXPORTAR CSV =====
+async function exportarCSV() {
+  const mes = document.getElementById('mes-filtro').value;
+  const { inicio, fim } = mesParaRange(mes);
+
+  const [{ data: entradas }, { data: despesas }] = await Promise.all([
+    db.from('entradas').select('*, membros(nome)').gte('data', inicio).lte('data', fim).order('data'),
+    db.from('despesas').select('*, categorias(nome)').gte('data', inicio).lte('data', fim).order('data')
+  ]);
+
+  let csv = 'RELATÓRIO FINANCEIRO — ' + NOME_IGREJA + '\n';
+  csv += 'Período: ' + mes + '\n\n';
+
+  csv += 'ENTRADAS\n';
+  csv += 'Data,Culto,Tipo,Dizimista,Valor,Observação\n';
+  (entradas||[]).forEach(e => {
+    csv += `${e.data},${e.culto},${e.tipo},${e.membros?.nome||''},${e.valor},"${e.observacao||''}"\n`;
+  });
+
+  const totalEnt = (entradas||[]).reduce((s,e)=>s+Number(e.valor),0);
+  csv += `Total Entradas,,,,${totalEnt.toFixed(2)}\n\n`;
+
+  csv += 'DESPESAS\n';
+  csv += 'Data,Categoria,Descrição,Valor,Forma Pagamento,Responsável\n';
+  (despesas||[]).forEach(d => {
+    csv += `${d.data},${d.categorias?.nome||''},${d.descricao},${d.valor},${d.forma_pagamento},${d.responsavel||''}\n`;
+  });
+
+  const totalDep = (despesas||[]).reduce((s,d)=>s+Number(d.valor),0);
+  csv += `Total Despesas,,,${totalDep.toFixed(2)}\n`;
+  csv += `SALDO,,,${(totalEnt-totalDep).toFixed(2)}\n`;
+
+  const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `financeiro-igreja-${mes}.csv`;
+  link.click();
+  toast('✅ CSV exportado!');
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>
