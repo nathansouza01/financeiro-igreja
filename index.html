@@ -405,15 +405,78 @@ textarea { resize: vertical; min-height: 72px; }
   margin: 1.5rem 0 .75rem;
 }
 
+/* ===== EXPORT PDF BUTTON ===== */
+.btn-export-pdf {
+  width: 100%;
+  justify-content: center;
+  margin-top: .5rem;
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(22,163,74,0.3);
+}
+
+/* ===== PDF MODAL ===== */
+#pdf-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 300;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+#pdf-overlay.open { display: flex; }
+#pdf-modal {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow-elevated);
+  padding: 1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+  width: 100%;
+  max-width: 540px;
+}
+.pdf-modal-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 1.25rem;
+}
+.btn-cancelar {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 12px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 480px) {
   .form-row { grid-template-columns: 1fr; }
   .stats-row { grid-template-columns: repeat(3, 1fr); }
   main { padding: .75rem; }
 }
+@media (max-width: 390px) {
+  /* iPhone 13 mini / telas estreitas */
+  .stat-value { font-size: 16px; }
+  .nav-btn { font-size: 9px; padding: 10px 2px 8px; }
+  .card { padding: 1rem; }
+}
 @media (max-width: 360px) {
   .stats-row { grid-template-columns: 1fr 1fr; }
-  .stat-value { font-size: 17px; }
+  .stat-value { font-size: 15px; }
 }
 </style>
 </head>
@@ -463,7 +526,10 @@ textarea { resize: vertical; min-height: 72px; }
 <div class="page active" id="page-dashboard">
   <div class="month-bar">
     <input type="month" id="mes-filtro" onchange="loadDashboard()"/>
-    <button class="btn btn-sm btn-export" onclick="exportarCSV()">↓ CSV</button>
+    <button class="btn btn-primary btn-export-pdf" onclick="abrirModalPDF()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      Exportar Relatório (PDF)
+    </button>
   </div>
 
   <div class="stats-row">
@@ -655,6 +721,36 @@ textarea { resize: vertical; min-height: 72px; }
 </div>
 
 </main>
+
+<!-- ===== MODAL PDF ===== -->
+<div id="pdf-overlay" onclick="fecharModalPDF(event)">
+  <div id="pdf-modal">
+    <div class="pdf-modal-title">EXPORTAR RELATÓRIO</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>De</label>
+        <input type="date" id="pdf-de"/>
+      </div>
+      <div class="form-group">
+        <label>Até</label>
+        <input type="date" id="pdf-ate"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Tipo</label>
+      <select id="pdf-tipo">
+        <option value="ambos">Entradas e Despesas</option>
+        <option value="entradas">Somente Entradas</option>
+        <option value="despesas">Somente Despesas</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:.75rem" onclick="gerarPDF()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Gerar PDF
+    </button>
+    <button class="btn btn-cancelar" onclick="fecharModalPDF()">Cancelar</button>
+  </div>
+</div>
 
 <!-- TOAST -->
 <div id="toast"></div>
@@ -972,44 +1068,144 @@ async function deletarMembro(id) {
   loadMembrosSelect();
 }
 
-// ===== EXPORTAR CSV =====
-async function exportarCSV() {
+// ===== MODAL PDF =====
+function abrirModalPDF() {
   const mes = document.getElementById('mes-filtro').value;
   const { inicio, fim } = mesParaRange(mes);
+  document.getElementById('pdf-de').value  = inicio;
+  document.getElementById('pdf-ate').value = fim;
+  document.getElementById('pdf-overlay').classList.add('open');
+}
+function fecharModalPDF(e) {
+  if (!e || e.target === document.getElementById('pdf-overlay')) {
+    document.getElementById('pdf-overlay').classList.remove('open');
+  }
+}
+
+async function gerarPDF() {
+  const de   = document.getElementById('pdf-de').value;
+  const ate  = document.getElementById('pdf-ate').value;
+  const tipo = document.getElementById('pdf-tipo').value;
+  if (!de || !ate) { toast('⚠️ Preencha o período'); return; }
+
+  toast('⏳ Gerando PDF...');
+  fecharModalPDF();
 
   const [{ data: entradas }, { data: despesas }] = await Promise.all([
-    db.from('entradas').select('*').gte('data', inicio).lte('data', fim).order('data'),
-    db.from('despesas').select('*, categorias(nome)').gte('data', inicio).lte('data', fim).order('data')
+    db.from('entradas').select('*').gte('data', de).lte('data', ate).order('data'),
+    db.from('despesas').select('*, categorias(nome)').gte('data', de).lte('data', ate).order('data')
   ]);
 
-  let csv = 'RELATÓRIO FINANCEIRO — ' + NOME_IGREJA + '\n';
-  csv += 'Período: ' + mes + '\n\n';
-
-  csv += 'ENTRADAS\n';
-  csv += 'Data,Culto,Tipo,Dizimista,Valor,Observação\n';
-  (entradas||[]).forEach(e => {
-    csv += `${e.data},${e.culto},${e.tipo},${e.nome_dizimista||''},${e.valor},"${e.observacao||''}"\n`;
-  });
+  const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '';
+  const fmtV = v => 'R$\u00a0' + Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const tipoLabel = tipo==='entradas' ? 'Somente Entradas' : tipo==='despesas' ? 'Somente Despesas' : 'Entradas e Despesas';
 
   const totalEnt = (entradas||[]).reduce((s,e)=>s+Number(e.valor),0);
-  csv += `Total Entradas,,,,${totalEnt.toFixed(2)}\n\n`;
-
-  csv += 'DESPESAS\n';
-  csv += 'Data,Categoria,Descrição,Valor,Forma Pagamento,Responsável\n';
-  (despesas||[]).forEach(d => {
-    csv += `${d.data},${d.categorias?.nome||''},${d.descricao},${d.valor},${d.forma_pagamento},${d.responsavel||''}\n`;
-  });
-
   const totalDep = (despesas||[]).reduce((s,d)=>s+Number(d.valor),0);
-  csv += `Total Despesas,,,${totalDep.toFixed(2)}\n`;
-  csv += `SALDO,,,${(totalEnt-totalDep).toFixed(2)}\n`;
+  const saldo    = totalEnt - totalDep;
 
-  const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `financeiro-igreja-${mes}.csv`;
-  link.click();
-  toast('✅ CSV exportado!');
+  let linhasEnt = '';
+  if (tipo !== 'despesas') {
+    (entradas||[]).forEach(e => {
+      linhasEnt += `
+        <tr>
+          <td>${fmtD(e.data)}</td>
+          <td>${e.tipo === 'Dízimo' ? (e.nome_dizimista||'Anônimo') : (e.observacao||'—')}</td>
+          <td>${e.culto}</td>
+          <td>${e.tipo}</td>
+          <td class="val-pos">+${fmtV(e.valor)}</td>
+        </tr>`;
+    });
+  }
+
+  let linhasDep = '';
+  if (tipo !== 'entradas') {
+    (despesas||[]).forEach(d => {
+      linhasDep += `
+        <tr>
+          <td>${fmtD(d.data)}</td>
+          <td>${d.descricao}</td>
+          <td>${d.categorias?.nome||'—'}</td>
+          <td>${d.forma_pagamento||'—'}</td>
+          <td class="val-neg">−${fmtV(d.valor)}</td>
+        </tr>`;
+    });
+  }
+
+  const tabelaEnt = tipo !== 'despesas' ? `
+    <div class="section-header">Entradas</div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição / Dizimista</th><th>Culto</th><th>Tipo</th><th>Valor</th></tr></thead>
+      <tbody>${linhasEnt || '<tr><td colspan="5" class="empty-row">Nenhuma entrada no período</td></tr>'}</tbody>
+    </table>` : '';
+
+  const tabelaDep = tipo !== 'entradas' ? `
+    <div class="section-header">Despesas</div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Pagamento</th><th>Valor</th></tr></thead>
+      <tbody>${linhasDep || '<tr><td colspan="5" class="empty-row">Nenhuma despesa no período</td></tr>'}</tbody>
+    </table>` : '';
+
+  const totaisHtml = `
+    <div class="totais">
+      ${tipo !== 'despesas' ? `<div class="total-row"><span>Total de Entradas:</span><span class="val-pos">${fmtV(totalEnt)}</span></div>` : ''}
+      ${tipo !== 'entradas' ? `<div class="total-row"><span>Total de Despesas:</span><span class="val-neg">${fmtV(totalDep)}</span></div>` : ''}
+      ${tipo === 'ambos'    ? `<div class="total-row saldo"><span>Saldo:</span><span class="${saldo>=0?'val-pos':'val-neg'}">${fmtV(saldo)}</span></div>` : ''}
+    </div>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Extrato — ${NOME_IGREJA}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1c1c1e; padding: 32px; }
+  .header { margin-bottom: 24px; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #1c1c1e; }
+  .header p  { font-size: 13px; color: #6e6e73; margin-top: 2px; }
+  .periodo   { font-size: 12px; color: #6e6e73; margin-top: 12px; border-top: 1px solid #e5e5ea; padding-top: 10px; }
+  .section-header {
+    background: #16a34a; color: #fff;
+    font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 6px 10px; border-radius: 6px 6px 0 0; margin-top: 20px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  thead th { background: #f4f4f5; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #6e6e73; padding: 7px 10px; text-align: left; border-bottom: 1px solid #e5e5ea; }
+  tbody td { padding: 8px 10px; border-bottom: 1px solid #f4f4f5; font-size: 12px; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) td { background: #fafafa; }
+  .val-pos { color: #16a34a; font-weight: 700; text-align: right; white-space: nowrap; }
+  .val-neg { color: #dc2626; font-weight: 700; text-align: right; white-space: nowrap; }
+  thead th:last-child { text-align: right; }
+  .empty-row { text-align: center; color: #9a9aa0; padding: 16px; }
+  .totais { margin-top: 20px; border-top: 2px solid #1c1c1e; padding-top: 12px; }
+  .total-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+  .total-row span:first-child { color: #6e6e73; }
+  .saldo { font-size: 15px; font-weight: 700; margin-top: 6px; border-top: 1px solid #e5e5ea; padding-top: 8px; }
+  .footer { margin-top: 32px; font-size: 11px; color: #9a9aa0; text-align: center; border-top: 1px solid #e5e5ea; padding-top: 12px; }
+  @media print { body { padding: 16px; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>${NOME_IGREJA}</h1>
+    <p>Extrato de Lançamentos</p>
+    <div class="periodo">Período: ${fmtD(de)} a ${fmtD(ate)} · ${tipoLabel}</div>
+  </div>
+  ${tabelaEnt}
+  ${tabelaDep}
+  ${totaisHtml}
+  <div class="footer">Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>
+</body>
+</html>`;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(html);
+  janela.document.close();
+  setTimeout(() => { janela.focus(); janela.print(); }, 600);
+  toast('✅ PDF gerado!');
 }
 
 // ===== START =====
