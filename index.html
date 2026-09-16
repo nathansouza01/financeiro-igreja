@@ -405,6 +405,34 @@ textarea { resize: vertical; min-height: 72px; }
   margin: 1.5rem 0 .75rem;
 }
 
+/* ===== AUTOCOMPLETE DIZIMISTA ===== */
+.sugestoes {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-elevated);
+  z-index: 50;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.sugestoes.open { display: block; }
+.sugestao-item {
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  border-bottom: 1px solid var(--separator);
+  transition: background .1s;
+}
+.sugestao-item:last-child { border-bottom: none; }
+.sugestao-item:hover, .sugestao-item:active { background: var(--fill); }
+
 /* ===== GRÁFICOS ===== */
 .chart-bar-row {
   display: flex;
@@ -693,7 +721,11 @@ textarea { resize: vertical; min-height: 72px; }
 
     <div class="form-group" id="grupo-membro" style="display:none">
       <label>Nome do dizimista</label>
-      <input type="text" id="ent-membro" placeholder="Digite o nome..."/>
+      <div style="position:relative">
+        <input type="text" id="ent-membro" placeholder="Digite o nome..." autocomplete="off"
+          oninput="filtrarDizimistas()" onblur="setTimeout(()=>fecharSugestoes(),200)"/>
+        <div id="sugestoes-dizimista" class="sugestoes"></div>
+      </div>
     </div>
 
     <div class="form-group">
@@ -889,7 +921,8 @@ async function init() {
   document.getElementById('mes-header').textContent = new Date().toLocaleDateString('pt-BR',{month:'short',year:'numeric'}).toUpperCase();
 
   await loadCategoriasSelect();
-  carregarTodosLancamentos(); // carrega em background para a busca
+  carregarTodosLancamentos();
+  carregarDizimistas();
   loadDashboard();
 }
 
@@ -1071,6 +1104,43 @@ function irParaLancamento(tipo, data) {
   }, 600);
 }
 
+// ===== AUTOCOMPLETE DIZIMISTAS =====
+let _dizimistas = [];
+
+async function carregarDizimistas() {
+  const { data } = await db.from('dizimistas').select('nome').order('nome');
+  _dizimistas = (data||[]).map(d => d.nome);
+}
+
+function filtrarDizimistas() {
+  const val = document.getElementById('ent-membro').value.trim().toLowerCase();
+  const box = document.getElementById('sugestoes-dizimista');
+  if (!val || val.length < 2) { box.classList.remove('open'); return; }
+  const filtrados = _dizimistas.filter(n => n.toLowerCase().includes(val)).slice(0, 8);
+  if (!filtrados.length) { box.classList.remove('open'); return; }
+  box.innerHTML = filtrados.map(n =>
+    `<div class="sugestao-item" onmousedown="selecionarDizimista('${n.replace(/'/g,"\\'")}')">
+      ${n}
+    </div>`).join('');
+  box.classList.add('open');
+}
+
+function selecionarDizimista(nome) {
+  document.getElementById('ent-membro').value = nome;
+  fecharSugestoes();
+}
+
+function fecharSugestoes() {
+  document.getElementById('sugestoes-dizimista').classList.remove('open');
+}
+
+async function salvarNomeDizimista(nome) {
+  if (!nome || _dizimistas.map(d=>d.toLowerCase()).includes(nome.toLowerCase())) return;
+  await db.from('dizimistas').insert({ nome });
+  _dizimistas.push(nome);
+  _dizimistas.sort((a,b) => a.localeCompare(b));
+}
+
 // ===== ENTRADA =====
 function toggleMembro() {
   const isDizimo = document.querySelector('input[name=tipo]:checked').value === 'Dízimo';
@@ -1100,9 +1170,16 @@ async function salvarEntrada() {
   });
 
   if (error) { toast('Erro ao salvar: ' + error.message); return; }
+
+  // salva nome no banco de dizimistas para autocomplete futuro
+  if (tipo === 'Dízimo' && nomeDizimista) {
+    await salvarNomeDizimista(nomeDizimista);
+  }
+
   toast('✅ Entrada salva!');
   document.getElementById('ent-valor').value = '';
   document.getElementById('ent-obs').value = '';
+  document.getElementById('ent-membro').value = '';
 }
 
 // ===== DESPESA =====
@@ -1295,102 +1372,155 @@ async function gerarPDF() {
   const totalDep = (despesas||[]).reduce((s,d)=>s+Number(d.valor),0);
   const saldo    = totalEnt - totalDep;
 
+  // ---- gráfico barras (SVG) ----
+  function svgBarras(itens, cor, titulo) {
+    if (!itens.length) return '';
+    const max = Math.max(...itens.map(i=>i.val), 1);
+    const H = itens.length * 32 + 20;
+    const W = 480;
+    const labelW = 130, valW = 70, barX = labelW + 8, barW = W - labelW - valW - 16;
+    const rows = itens.map((item, i) => {
+      const y = 10 + i * 32;
+      const fillW = (item.val / max * barW).toFixed(1);
+      return `
+        <text x="0" y="${y+14}" font-size="11" fill="#3a3a40" font-family="Arial">${item.label}</text>
+        <rect x="${barX}" y="${y+4}" width="${barW}" height="14" rx="7" fill="#f0f4f1"/>
+        <rect x="${barX}" y="${y+4}" width="${fillW}" height="14" rx="7" fill="${cor}"/>
+        <text x="${W-valW}" y="${y+14}" font-size="11" fill="${cor}" font-family="Arial" font-weight="bold">${fmtV(item.val)}</text>`;
+    }).join('');
+    return `
+      <div class="chart-section">
+        <div class="chart-title">${titulo}</div>
+        <svg width="100%" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${rows}</svg>
+      </div>`;
+  }
+
+  function svgLinha(pontos, cor, titulo) {
+    if (!pontos.length) return '';
+    const W = 480, H = 80, pad = 12;
+    const max = Math.max(...pontos.map(p=>p.v), 1);
+    const xs = pontos.map((_,i) => pad + i*(W-pad*2)/(Math.max(pontos.length-1,1)));
+    const ys = pontos.map(p => H - pad - (p.v/max)*(H-pad*2));
+    const poly = xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+    const area = `${xs[0].toFixed(1)},${H} `+poly+` ${xs[xs.length-1].toFixed(1)},${H}`;
+    const dots = xs.map((x,i)=>`
+      <circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="3" fill="${cor}"/>
+      <text x="${x.toFixed(1)}" y="${H+14}" text-anchor="middle" font-size="9" fill="#8e8e93" font-family="Arial">${pontos[i].label}</text>`).join('');
+    return `
+      <div class="chart-section">
+        <div class="chart-title">${titulo}</div>
+        <svg width="100%" viewBox="0 0 ${W} ${H+20}" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="${area}" fill="${cor}" opacity="0.12"/>
+          <polyline points="${poly}" fill="none" stroke="${cor}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          ${dots}
+        </svg>
+      </div>`;
+  }
+
+  // montar dados dos gráficos
+  const cultos = ['Domingo','Quarta-feira','Sábado'];
+  const porCulto = cultos.map(c=>({
+    label: c==='Quarta-feira'?'Quarta':c,
+    val: (entradas||[]).filter(e=>e.culto===c).reduce((s,e)=>s+Number(e.valor),0)
+  }));
+
+  const diaMap = {};
+  (entradas||[]).forEach(e=>{ const d=e.data.slice(8,10); diaMap[d]=(diaMap[d]||0)+Number(e.valor); });
+  const pontos = Object.entries(diaMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([d,v])=>({label:d,v}));
+
+  const catMap = {};
+  (despesas||[]).forEach(d=>{ const cat=d.categorias?.nome||'Outros'; catMap[cat]=(catMap[cat]||0)+Number(d.valor); });
+  const porCat = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).map(([label,val])=>({label,val}));
+
+  const graficosEnt = tipo !== 'despesas' ? `
+    ${svgBarras(porCulto, '#16a34a', 'Entradas por culto')}
+    ${svgLinha(pontos, '#16a34a', 'Evolução de entradas no mês')}` : '';
+
+  const graficosDep = tipo !== 'entradas'
+    ? svgBarras(porCat, '#dc2626', 'Despesas por categoria') : '';
+
+  // tabelas
   let linhasEnt = '';
   if (tipo !== 'despesas') {
     (entradas||[]).forEach(e => {
-      linhasEnt += `
-        <tr>
-          <td>${fmtD(e.data)}</td>
-          <td>${e.tipo === 'Dízimo' ? (e.nome_dizimista||'Anônimo') : (e.observacao||'—')}</td>
-          <td>${e.culto}</td>
-          <td>${e.tipo}</td>
-          <td class="val-pos">+${fmtV(e.valor)}</td>
-        </tr>`;
+      linhasEnt += `<tr>
+        <td>${fmtD(e.data)}</td>
+        <td>${e.tipo==='Dízimo'?(e.nome_dizimista||'Anônimo'):(e.observacao||'—')}</td>
+        <td>${e.culto}</td><td>${e.tipo}</td>
+        <td class="val-pos">+${fmtV(e.valor)}</td></tr>`;
     });
   }
-
   let linhasDep = '';
   if (tipo !== 'entradas') {
     (despesas||[]).forEach(d => {
-      linhasDep += `
-        <tr>
-          <td>${fmtD(d.data)}</td>
-          <td>${d.descricao}</td>
-          <td>${d.categorias?.nome||'—'}</td>
-          <td>${d.forma_pagamento||'—'}</td>
-          <td class="val-neg">−${fmtV(d.valor)}</td>
-        </tr>`;
+      linhasDep += `<tr>
+        <td>${fmtD(d.data)}</td><td>${d.descricao}</td>
+        <td>${d.categorias?.nome||'—'}</td><td>${d.forma_pagamento||'—'}</td>
+        <td class="val-neg">−${fmtV(d.valor)}</td></tr>`;
     });
   }
 
   const tabelaEnt = tipo !== 'despesas' ? `
-    <div class="section-header">Entradas</div>
-    <table>
-      <thead><tr><th>Data</th><th>Descrição / Dizimista</th><th>Culto</th><th>Tipo</th><th>Valor</th></tr></thead>
-      <tbody>${linhasEnt || '<tr><td colspan="5" class="empty-row">Nenhuma entrada no período</td></tr>'}</tbody>
-    </table>` : '';
+    <div class="section-header green-h">Entradas</div>
+    <table><thead><tr><th>Data</th><th>Descrição / Dizimista</th><th>Culto</th><th>Tipo</th><th>Valor</th></tr></thead>
+    <tbody>${linhasEnt||'<tr><td colspan="5" class="empty-row">Nenhuma entrada no período</td></tr>'}</tbody></table>` : '';
 
   const tabelaDep = tipo !== 'entradas' ? `
-    <div class="section-header">Despesas</div>
-    <table>
-      <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Pagamento</th><th>Valor</th></tr></thead>
-      <tbody>${linhasDep || '<tr><td colspan="5" class="empty-row">Nenhuma despesa no período</td></tr>'}</tbody>
-    </table>` : '';
+    <div class="section-header red-h">Despesas</div>
+    <table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Pagamento</th><th>Valor</th></tr></thead>
+    <tbody>${linhasDep||'<tr><td colspan="5" class="empty-row">Nenhuma despesa no período</td></tr>'}</tbody></table>` : '';
 
   const totaisHtml = `
     <div class="totais">
-      ${tipo !== 'despesas' ? `<div class="total-row"><span>Total de Entradas:</span><span class="val-pos">${fmtV(totalEnt)}</span></div>` : ''}
-      ${tipo !== 'entradas' ? `<div class="total-row"><span>Total de Despesas:</span><span class="val-neg">${fmtV(totalDep)}</span></div>` : ''}
-      ${tipo === 'ambos'    ? `<div class="total-row saldo"><span>Saldo:</span><span class="${saldo>=0?'val-pos':'val-neg'}">${fmtV(saldo)}</span></div>` : ''}
+      ${tipo!=='despesas'?`<div class="total-row"><span>Total de Entradas:</span><span class="val-pos">${fmtV(totalEnt)}</span></div>`:''}
+      ${tipo!=='entradas'?`<div class="total-row"><span>Total de Despesas:</span><span class="val-neg">${fmtV(totalDep)}</span></div>`:''}
+      ${tipo==='ambos'?`<div class="total-row saldo"><span>Saldo:</span><span class="${saldo>=0?'val-pos':'val-neg'}">${fmtV(saldo)}</span></div>`:''}
     </div>`;
 
   const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8"/>
+<html lang="pt-BR"><head><meta charset="UTF-8"/>
 <title>Extrato — ${NOME_IGREJA}</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1c1c1e; padding: 32px; }
-  .header { margin-bottom: 24px; }
-  .header h1 { font-size: 22px; font-weight: 700; color: #1c1c1e; }
-  .header p  { font-size: 13px; color: #6e6e73; margin-top: 2px; }
-  .periodo   { font-size: 12px; color: #6e6e73; margin-top: 12px; border-top: 1px solid #e5e5ea; padding-top: 10px; }
-  .section-header {
-    background: #16a34a; color: #fff;
-    font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-    padding: 6px 10px; border-radius: 6px 6px 0 0; margin-top: 20px;
-  }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-  thead th { background: #f4f4f5; font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .05em; color: #6e6e73; padding: 7px 10px; text-align: left; border-bottom: 1px solid #e5e5ea; }
-  tbody td { padding: 8px 10px; border-bottom: 1px solid #f4f4f5; font-size: 12px; vertical-align: top; }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody tr:nth-child(even) td { background: #fafafa; }
-  .val-pos { color: #16a34a; font-weight: 700; text-align: right; white-space: nowrap; }
-  .val-neg { color: #dc2626; font-weight: 700; text-align: right; white-space: nowrap; }
-  thead th:last-child { text-align: right; }
-  .empty-row { text-align: center; color: #9a9aa0; padding: 16px; }
-  .totais { margin-top: 20px; border-top: 2px solid #1c1c1e; padding-top: 12px; }
-  .total-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
-  .total-row span:first-child { color: #6e6e73; }
-  .saldo { font-size: 15px; font-weight: 700; margin-top: 6px; border-top: 1px solid #e5e5ea; padding-top: 8px; }
-  .footer { margin-top: 32px; font-size: 11px; color: #9a9aa0; text-align: center; border-top: 1px solid #e5e5ea; padding-top: 12px; }
-  @media print { body { padding: 16px; } }
-</style>
-</head>
-<body>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,Helvetica,sans-serif; font-size:12px; color:#1c1c1e; padding:28px; }
+  .header h1 { font-size:22px; font-weight:700; }
+  .header p  { font-size:13px; color:#6e6e73; margin-top:2px; }
+  .periodo   { font-size:12px; color:#6e6e73; margin-top:10px; border-top:1px solid #e5e5ea; padding-top:8px; }
+  .chart-section { margin:16px 0 8px; }
+  .chart-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6e6e73; margin-bottom:6px; }
+  .section-header { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:#fff; padding:6px 10px; border-radius:6px 6px 0 0; margin-top:20px; }
+  .green-h { background:#16a34a; }
+  .red-h   { background:#dc2626; }
+  table { width:100%; border-collapse:collapse; margin-bottom:4px; }
+  thead th { background:#f4f4f5; font-size:10px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:#6e6e73; padding:7px 10px; text-align:left; border-bottom:1px solid #e5e5ea; }
+  tbody td { padding:7px 10px; border-bottom:1px solid #f4f4f5; font-size:12px; vertical-align:top; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:nth-child(even) td { background:#fafafa; }
+  .val-pos { color:#16a34a; font-weight:700; text-align:right; white-space:nowrap; }
+  .val-neg { color:#dc2626; font-weight:700; text-align:right; white-space:nowrap; }
+  thead th:last-child { text-align:right; }
+  .empty-row { text-align:center; color:#9a9aa0; padding:14px; }
+  .totais { margin-top:20px; border-top:2px solid #1c1c1e; padding-top:12px; }
+  .total-row { display:flex; justify-content:space-between; padding:5px 0; font-size:13px; }
+  .total-row span:first-child { color:#6e6e73; }
+  .saldo { font-size:15px; font-weight:700; margin-top:6px; border-top:1px solid #e5e5ea; padding-top:8px; }
+  .footer { margin-top:28px; font-size:11px; color:#9a9aa0; text-align:center; border-top:1px solid #e5e5ea; padding-top:10px; }
+  @media print { body { padding:16px; } }
+</style></head><body>
   <div class="header">
     <h1>${NOME_IGREJA}</h1>
     <p>Extrato de Lançamentos</p>
     <div class="periodo">Período: ${fmtD(de)} a ${fmtD(ate)} · ${tipoLabel}</div>
   </div>
+  ${graficosEnt}
+  ${graficosDep}
   ${tabelaEnt}
   ${tabelaDep}
   ${totaisHtml}
   <div class="footer">Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>
-</body>
-</html>`;
+</body></html>`;
 
   const janela = window.open('', '_blank');
   janela.document.write(html);
