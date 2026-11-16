@@ -506,7 +506,7 @@ textarea { resize: vertical; min-height: 72px; }
 }
 
 /* ===== PDF MODAL ===== */
-#pdf-overlay {
+#pdf-overlay, #conf-overlay {
   display: none;
   position: fixed;
   inset: 0;
@@ -518,8 +518,8 @@ textarea { resize: vertical; min-height: 72px; }
   justify-content: center;
   padding-bottom: env(safe-area-inset-bottom);
 }
-#pdf-overlay.open { display: flex; }
-#pdf-modal {
+#pdf-overlay.open, #conf-overlay.open { display: flex; }
+#pdf-modal, #conf-modal {
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--blur)) saturate(160%);
   -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
@@ -551,6 +551,38 @@ textarea { resize: vertical; min-height: 72px; }
   color: var(--text-secondary);
   cursor: pointer;
 }
+
+/* ===== CONFERÊNCIA ===== */
+.conf-card {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.conf-card .conf-txt { flex: 1; color: var(--text-secondary); }
+.conf-card.ok      { background: var(--green-l); }
+.conf-card.aviso   { background: var(--amber-l); }
+.conf-card.vencido { background: var(--red-l); }
+.conf-card .btn { white-space: nowrap; }
+.nav-btn { position: relative; }
+.nav-btn.alerta::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: calc(50% - 18px);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.nav-btn.alerta.vencido::after { background: var(--red); }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 480px) {
@@ -630,6 +662,7 @@ textarea { resize: vertical; min-height: 72px; }
     <div class="stat-label">Saldo anterior (transportado do mês passado)</div>
     <div class="stat-value blue" id="stat-anterior">R$0</div>
   </div>
+  <div id="conf-card" class="conf-card" style="display:none"></div>
 
   <div class="stats-row">
     <div class="stat">
@@ -722,6 +755,20 @@ textarea { resize: vertical; min-height: 72px; }
       <div class="form-group">
         <label>Valor (R$)</label>
         <input type="number" id="ent-valor" placeholder="0,00" min="0" step="0.01"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Forma de recebimento</label>
+      <div class="toggle-group">
+        <div class="toggle-opt">
+          <input type="radio" name="forma" id="forma-culto" value="No culto" checked/>
+          <label for="forma-culto">No culto</label>
+        </div>
+        <div class="toggle-opt">
+          <input type="radio" name="forma" id="forma-pix" value="Pix"/>
+          <label for="forma-pix">Pix</label>
+        </div>
       </div>
     </div>
 
@@ -819,12 +866,13 @@ textarea { resize: vertical; min-height: 72px; }
 <div class="page" id="page-config">
 
   <div class="card">
-    <div class="card-title">Saldo inicial do caixa</div>
-    <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:.75rem">Dinheiro em caixa antes do primeiro lançamento feito no app. Entra uma única vez no saldo anterior.</div>
-    <div style="display:flex; gap:8px;">
-      <input type="number" id="saldo-inicial-input" placeholder="0,00" step="0.01" style="flex:1"/>
-      <button class="btn btn-primary" style="width:auto" onclick="salvarSaldoInicial()">Salvar</button>
+    <div class="card-title">Início do controle</div>
+    <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:.75rem">Escolha o mês em que o controle começou a valer e quanto havia em caixa nesse momento. Lançamentos de meses anteriores ao início não entram no saldo anterior.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Mês de início</label><input type="month" id="mes-inicio-input"/></div>
+      <div class="form-group"><label>Caixa no início (R$)</label><input type="number" id="saldo-inicial-input" placeholder="0,00" step="0.01"/></div>
     </div>
+    <button class="btn btn-primary" onclick="salvarSaldoInicial()">Salvar</button>
   </div>
 
   <div class="card">
@@ -876,6 +924,25 @@ textarea { resize: vertical; min-height: 72px; }
       Gerar PDF
     </button>
     <button class="btn btn-cancelar" onclick="fecharModalPDF()">Cancelar</button>
+  </div>
+</div>
+
+<!-- ===== MODAL CONFERÊNCIA ===== -->
+<div id="conf-overlay" onclick="fecharConferencia(event)">
+  <div id="conf-modal">
+    <div class="pdf-modal-title" id="conf-titulo">CONFERIR SALDO</div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:1rem" id="conf-calc"></div>
+    <div class="form-group">
+      <label>Saldo real conferido (R$)</label>
+      <input type="number" id="conf-real" step="0.01" placeholder="0,00" oninput="atualizarDifConf()"/>
+    </div>
+    <div id="conf-dif" style="font-size:12px;font-weight:600;margin-bottom:1rem;min-height:16px"></div>
+    <div class="form-group">
+      <label>Observação (opcional)</label>
+      <input type="text" id="conf-obs" placeholder="Ex: diferença de troco"/>
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:.75rem" onclick="confirmarConferencia()">Confirmar saldo</button>
+    <button class="btn btn-cancelar" onclick="fecharConferencia()">Cancelar</button>
   </div>
 </div>
 
@@ -939,18 +1006,25 @@ async function init() {
   await loadCategoriasSelect();
   carregarTodosLancamentos();
   carregarDizimistas();
-  await carregarSaldoInicial();
+  await carregarConfig();
+  atualizarAlertaNav();
   loadDashboard();
 }
 
-// ===== SALDO ANTERIOR (acumulado) =====
-let _saldoInicial = 0;
+// ===== SALDO ANTERIOR (acumulado + conferência manual) =====
+let _cfg = { saldoInicial: 0, mesInicio: null, conferencias: [] };
 
-async function somarAteData(tabela, limite) {
+const proxMes = mes => { const [y,m] = mes.split('-').map(Number); const d = new Date(y, m, 1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); };
+const mesAnterior = mes => { const [y,m] = mes.split('-').map(Number); const d = new Date(y, m-2, 1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); };
+const nomeMes = mes => { const [y,m] = mes.split('-').map(Number); return new Date(y, m-1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); };
+
+async function somarPeriodo(tabela, ini, fim) {
   let total = 0, de = 0;
   const passo = 1000;
   while (true) {
-    const { data, error } = await db.from(tabela).select('valor').lt('data', limite).order('id').range(de, de + passo - 1);
+    let q = db.from(tabela).select('valor').lt('data', fim);
+    if (ini) q = q.gte('data', ini);
+    const { data, error } = await q.order('id').range(de, de + passo - 1);
     if (error || !data) break;
     total += data.reduce((s, r) => s + Number(r.valor), 0);
     if (data.length < passo) break;
@@ -959,26 +1033,140 @@ async function somarAteData(tabela, limite) {
   return total;
 }
 
-async function calcularSaldoAnterior(limite) {
-  const [e, d] = await Promise.all([somarAteData('entradas', limite), somarAteData('despesas', limite)]);
-  return _saldoInicial + e - d;
+async function movimentoPeriodo(ini, fim) {
+  const [e, d] = await Promise.all([somarPeriodo('entradas', ini, fim), somarPeriodo('despesas', ini, fim)]);
+  return e - d;
 }
 
-async function carregarSaldoInicial() {
-  const { data } = await db.from('configuracoes').select('valor').eq('chave', 'saldo_inicial').maybeSingle();
-  _saldoInicial = data ? Number(data.valor) : 0;
-  const el = document.getElementById('saldo-inicial-input');
-  if (el) el.value = _saldoInicial || '';
+// saldo em caixa no início do dia dataLimite (AAAA-MM-DD)
+async function calcularSaldoAnterior(dataLimite) {
+  const inicioControle = _cfg.mesInicio ? _cfg.mesInicio + '-01' : null;
+  if (inicioControle && dataLimite < inicioControle) return 0;
+  // âncora: última conferência manual de um mês já encerrado até dataLimite
+  const ancora = [..._cfg.conferencias].reverse().find(c =>
+    proxMes(c.mes) + '-01' <= dataLimite && (!inicioControle || c.mes + '-01' >= inicioControle));
+  if (ancora) return Number(ancora.saldo_confirmado) + await movimentoPeriodo(proxMes(ancora.mes) + '-01', dataLimite);
+  return _cfg.saldoInicial + await movimentoPeriodo(inicioControle, dataLimite);
+}
+
+async function carregarConfig() {
+  const [{ data: cfg }, { data: conf }] = await Promise.all([
+    db.from('configuracoes').select('*'),
+    db.from('conferencias').select('*').order('mes')
+  ]);
+  const get = k => (cfg || []).find(r => r.chave === k);
+  _cfg.saldoInicial = get('saldo_inicial') ? Number(get('saldo_inicial').valor) : 0;
+  _cfg.mesInicio = get('mes_inicio')?.texto || null;
+  _cfg.conferencias = conf || [];
+  const si = document.getElementById('saldo-inicial-input'); if (si) si.value = _cfg.saldoInicial || '';
+  const mi = document.getElementById('mes-inicio-input');   if (mi) mi.value = _cfg.mesInicio || '';
 }
 
 async function salvarSaldoInicial() {
   const v = parseFloat(document.getElementById('saldo-inicial-input').value);
   const valor = isNaN(v) ? 0 : v;
-  const { error } = await db.from('configuracoes').upsert({ chave: 'saldo_inicial', valor });
+  const mes = document.getElementById('mes-inicio-input').value || null;
+  const { error } = await db.from('configuracoes').upsert([
+    { chave: 'saldo_inicial', valor, texto: null },
+    { chave: 'mes_inicio', valor: 0, texto: mes }
+  ]);
   if (error) { toast('Erro ao salvar: ' + error.message); return; }
-  _saldoInicial = valor;
-  toast('Saldo inicial salvo');
+  await carregarConfig();
+  toast('Início do controle salvo');
   loadDashboard();
+  atualizarAlertaNav();
+}
+
+// ----- faixa de conferência no Resumo -----
+function renderConferencia(mes) {
+  const el = document.getElementById('conf-card');
+  const P = mesAnterior(mes);
+  if (mes > getMesAtual() || (_cfg.mesInicio && P < _cfg.mesInicio)) { el.style.display = 'none'; return; }
+  const conf = _cfg.conferencias.find(c => c.mes === P);
+  const nomeP = nomeMes(P);
+  let cls, txt;
+  if (conf) {
+    const dif = Number(conf.saldo_confirmado) - Number(conf.saldo_calculado);
+    if (Math.abs(dif) < 0.005) {
+      cls = 'ok'; txt = 'Saldo de ' + nomeP + ' conferido e batendo (' + fmt(conf.saldo_confirmado) + ').';
+    } else {
+      cls = 'aviso';
+      txt = 'Saldo de ' + nomeP + ' conferido com diferença de ' + (dif > 0 ? '+' : '−') + fmt(Math.abs(dif)) +
+            ' (app: ' + fmt(conf.saldo_calculado) + ' · real: ' + fmt(conf.saldo_confirmado) + '). O saldo anterior usa o valor real.';
+    }
+  } else {
+    const [y, m] = mes.split('-').map(Number);
+    const prazo = new Date(y, m - 1, 5);
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const dias = Math.round((prazo - hoje) / 86400000);
+    const prazoTxt = '05/' + String(m).padStart(2, '0');
+    if (dias >= 0) {
+      cls = 'aviso';
+      txt = 'Conferir o saldo de ' + nomeP + ' até ' + prazoTxt + ' · ' + (dias === 0 ? 'vence hoje' : 'faltam ' + dias + ' dia' + (dias > 1 ? 's' : '')) + '.';
+    } else {
+      cls = 'vencido';
+      txt = 'Saldo de ' + nomeP + ' sem conferência. O prazo venceu em ' + prazoTxt + '.';
+    }
+  }
+  el.className = 'conf-card ' + cls;
+  el.style.display = 'flex';
+  el.innerHTML = '<div class="conf-txt">' + txt + '</div><button class="btn btn-sm" onclick="abrirConferencia(\'' + P + '\')">' + (conf ? 'Refazer' : 'Conferir') + '</button>';
+}
+
+function atualizarAlertaNav() {
+  const btn = document.getElementById('nav-dashboard');
+  btn.classList.remove('alerta', 'vencido');
+  const P = mesAnterior(getMesAtual());
+  if (_cfg.mesInicio && P < _cfg.mesInicio) return;
+  if (_cfg.conferencias.some(c => c.mes === P)) return;
+  btn.classList.add('alerta');
+  if (new Date().getDate() > 5) btn.classList.add('vencido');
+}
+
+// ----- janela de conferência -----
+let _confMes = null, _confCalc = 0;
+
+async function abrirConferencia(mesP) {
+  _confMes = mesP;
+  const iniP = mesP + '-01', fimP = proxMes(mesP) + '-01';
+  _confCalc = (await calcularSaldoAnterior(iniP)) + (await movimentoPeriodo(iniP, fimP));
+  const existente = _cfg.conferencias.find(c => c.mes === mesP);
+  document.getElementById('conf-titulo').textContent = 'CONFERIR SALDO DE ' + nomeMes(mesP).toUpperCase();
+  document.getElementById('conf-calc').textContent = 'Saldo final calculado pelo app: ' + fmt(_confCalc) + '. Informe o valor real (dinheiro em caixa + conta).';
+  document.getElementById('conf-real').value = existente ? existente.saldo_confirmado : '';
+  document.getElementById('conf-obs').value = existente?.obs || '';
+  atualizarDifConf();
+  document.getElementById('conf-overlay').classList.add('open');
+}
+
+function fecharConferencia(e) {
+  if (!e || e.target === document.getElementById('conf-overlay')) {
+    document.getElementById('conf-overlay').classList.remove('open');
+  }
+}
+
+function atualizarDifConf() {
+  const v = parseFloat(document.getElementById('conf-real').value);
+  const el = document.getElementById('conf-dif');
+  if (isNaN(v)) { el.textContent = ''; return; }
+  const dif = v - _confCalc;
+  if (Math.abs(dif) < 0.005) { el.style.color = 'var(--green)'; el.textContent = 'Bate com o app.'; }
+  else { el.style.color = 'var(--red)'; el.textContent = 'Diferença de ' + (dif > 0 ? '+' : '−') + fmt(Math.abs(dif)) + ' em relação ao app.'; }
+}
+
+async function confirmarConferencia() {
+  const v = parseFloat(document.getElementById('conf-real').value);
+  if (isNaN(v)) { toast('Informe o saldo real'); return; }
+  const obs = document.getElementById('conf-obs').value.trim() || null;
+  const { error } = await db.from('conferencias').upsert({
+    mes: _confMes, saldo_calculado: _confCalc, saldo_confirmado: v, obs, confirmado_em: new Date().toISOString()
+  });
+  if (error) { toast('Erro ao salvar: ' + error.message); return; }
+  await carregarConfig();
+  fecharConferencia();
+  toast('Saldo conferido');
+  loadDashboard();
+  atualizarAlertaNav();
 }
 
 // ===== DASHBOARD =====
@@ -1039,6 +1227,7 @@ async function loadDashboard() {
   const saldo = saldoAnt + totalEnt - totalDep;
 
   document.getElementById('stat-anterior').textContent = fmt(saldoAnt);
+  renderConferencia(mes);
   document.getElementById('stat-entradas').textContent = fmt(totalEnt);
   document.getElementById('stat-despesas').textContent = fmt(totalDep);
   const saldoEl = document.getElementById('stat-saldo');
@@ -1100,7 +1289,7 @@ async function carregarTodosLancamentos() {
       tipo: 'entrada',
       id: e.id,
       titulo: e.tipo === 'Dízimo' ? (e.nome_dizimista||'Anônimo') : (semEmoji(e.observacao)||'Oferta'),
-      sub: `${fmtDate(e.data)} · ${e.culto} · ${e.tipo}`,
+      sub: `${fmtDate(e.data)} · ${e.culto} · ${e.tipo}${e.forma_recebimento?' · '+e.forma_recebimento:''}`,
       valor: e.valor,
       data: e.data,
       cor: 'var(--green)',
@@ -1217,12 +1406,13 @@ async function salvarEntrada() {
   const data  = document.getElementById('ent-data').value;
   const valor = parseFloat(document.getElementById('ent-valor').value);
   const obs   = document.getElementById('ent-obs').value;
+  const forma = document.querySelector('input[name=forma]:checked').value;
   const nomeDizimista = document.getElementById('ent-membro').value.trim() || null;
 
   if (!data || isNaN(valor) || valor <= 0) { toast('Preencha data e valor'); return; }
 
   const { error } = await db.from('entradas').insert({
-    data, culto, tipo, valor, observacao: obs,
+    data, culto, tipo, valor, observacao: obs, forma_recebimento: forma,
     nome_dizimista: tipo==='Dízimo' ? nomeDizimista : null
   });
 
@@ -1290,7 +1480,7 @@ async function loadHistorico() {
             <span class="badge ${e.tipo==='Dízimo'?'badge-blue':'badge-green'}">${e.tipo}</span>
             ${e.nome_dizimista ? ' · ' + e.nome_dizimista : ''}
           </div>
-          <div class="item-sub">${fmtDate(e.data)} · ${e.culto}${semEmoji(e.observacao)?' · '+semEmoji(e.observacao):''}</div>
+          <div class="item-sub">${fmtDate(e.data)} · ${e.culto}${e.forma_recebimento?' · '+e.forma_recebimento:''}${semEmoji(e.observacao)?' · '+semEmoji(e.observacao):''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <div class="item-value" style="color:var(--green)">${fmt(e.valor)}</div>
@@ -1505,7 +1695,7 @@ async function gerarPDF() {
       linhasEnt += `<tr>
         <td>${fmtD(e.data)}</td>
         <td>${e.tipo==='Dízimo'?(e.nome_dizimista||'Anônimo'):(semEmoji(e.observacao)||'—')}</td>
-        <td>${e.culto}</td><td>${e.tipo}</td>
+        <td>${e.culto}</td><td>${e.tipo}</td><td>${e.forma_recebimento||'—'}</td>
         <td class="val-pos">+${fmtV(e.valor)}</td></tr>`;
     });
   }
@@ -1521,8 +1711,8 @@ async function gerarPDF() {
 
   const tabelaEnt = tipo !== 'despesas' ? `
     <div class="section-header green-h">Entradas</div>
-    <table><thead><tr><th>Data</th><th>Descrição / Dizimista</th><th>Culto</th><th>Tipo</th><th>Valor</th></tr></thead>
-    <tbody>${linhasEnt||'<tr><td colspan="5" class="empty-row">Nenhuma entrada no período</td></tr>'}</tbody></table>` : '';
+    <table><thead><tr><th>Data</th><th>Descrição / Dizimista</th><th>Culto</th><th>Tipo</th><th>Recebido</th><th>Valor</th></tr></thead>
+    <tbody>${linhasEnt||'<tr><td colspan="6" class="empty-row">Nenhuma entrada no período</td></tr>'}</tbody></table>` : '';
 
   const tabelaDep = tipo !== 'entradas' ? `
     <div class="section-header red-h">Despesas</div>
